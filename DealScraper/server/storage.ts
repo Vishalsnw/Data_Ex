@@ -1,8 +1,8 @@
-import { type Deal, type InsertDeal, type DealFilters } from "@shared/schema";
+import { type Deal, type InsertDeal, type DealFilters, deals } from "@shared/schema";
+import { eq, and, gte, lte, sql, desc, asc } from "drizzle-orm";
 import { randomUUID } from "crypto";
 
 export interface IStorage {
-  // Deal operations
   createDeal(deal: InsertDeal): Promise<Deal>;
   getDeals(filters?: DealFilters): Promise<{ deals: Deal[]; total: number }>;
   getDealById(id: string): Promise<Deal | undefined>;
@@ -17,7 +17,145 @@ export interface IStorage {
   }>;
 }
 
-export class MemStorage implements IStorage {
+class PostgresStorage implements IStorage {
+  private db: any;
+
+  constructor() {
+    import("./db").then((module) => {
+      this.db = module.db;
+    });
+  }
+
+  async createDeal(insertDeal: InsertDeal): Promise<Deal> {
+    const [deal] = await this.db.insert(deals).values(insertDeal).returning();
+    return deal;
+  }
+
+  async getDeals(filters?: DealFilters): Promise<{ deals: Deal[]; total: number }> {
+    const now = new Date();
+    const conditions = [];
+
+    conditions.push(
+      sql`(${deals.expiresAt} IS NULL OR ${deals.expiresAt} > ${now})`
+    );
+
+    if (filters?.platforms && filters.platforms.length > 0) {
+      conditions.push(sql`${deals.platform} = ANY(${filters.platforms})`);
+    }
+
+    if (filters?.categories && filters.categories.length > 0) {
+      conditions.push(sql`${deals.category} = ANY(${filters.categories})`);
+    }
+
+    if (filters?.minDiscount) {
+      conditions.push(gte(deals.discountPercentage, filters.minDiscount));
+    }
+
+    if (filters?.minPrice) {
+      conditions.push(gte(deals.discountedPrice, filters.minPrice));
+    }
+
+    if (filters?.maxPrice) {
+      conditions.push(lte(deals.discountedPrice, filters.maxPrice));
+    }
+
+    let query = this.db.select().from(deals).where(and(...conditions));
+
+    if (filters?.sortBy) {
+      switch (filters.sortBy) {
+        case "discount_desc":
+          query = query.orderBy(desc(deals.discountPercentage));
+          break;
+        case "discount_asc":
+          query = query.orderBy(asc(deals.discountPercentage));
+          break;
+        case "price_asc":
+          query = query.orderBy(asc(deals.discountedPrice));
+          break;
+        case "price_desc":
+          query = query.orderBy(desc(deals.discountedPrice));
+          break;
+        case "platform":
+          query = query.orderBy(asc(deals.platform));
+          break;
+        case "newest":
+          query = query.orderBy(desc(deals.scrapedAt));
+          break;
+      }
+    }
+
+    const page = filters?.page || 1;
+    const limit = filters?.limit || 50;
+    const offset = (page - 1) * limit;
+
+    const [dealsResult, totalResult] = await Promise.all([
+      query.limit(limit).offset(offset),
+      this.db.select({ count: sql<number>`count(*)::int` }).from(deals).where(and(...conditions))
+    ]);
+
+    return {
+      deals: dealsResult,
+      total: totalResult[0]?.count || 0
+    };
+  }
+
+  async getDealById(id: string): Promise<Deal | undefined> {
+    const [deal] = await this.db.select().from(deals).where(eq(deals.id, id)).limit(1);
+    return deal;
+  }
+
+  async updateDeal(id: string, updateData: Partial<InsertDeal>): Promise<Deal | undefined> {
+    const [updated] = await this.db
+      .update(deals)
+      .set(updateData)
+      .where(eq(deals.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteDeal(id: string): Promise<boolean> {
+    const result = await this.db.delete(deals).where(eq(deals.id, id));
+    return result.rowCount !== null && result.rowCount > 0;
+  }
+
+  async clearExpiredDeals(): Promise<number> {
+    const now = new Date();
+    const result = await this.db
+      .delete(deals)
+      .where(
+        and(
+          sql`${deals.expiresAt} IS NOT NULL`,
+          lte(deals.expiresAt, now)
+        )
+      );
+    return result.rowCount || 0;
+  }
+
+  async getDealStats(): Promise<{
+    totalDeals: number;
+    avgDiscount: number;
+    bestDiscount: number;
+    platforms: number;
+  }> {
+    const now = new Date();
+    
+    const [stats] = await this.db
+      .select({
+        totalDeals: sql<number>`count(*)::int`,
+        avgDiscount: sql<number>`COALESCE(round(avg(${deals.discountPercentage})), 0)::int`,
+        bestDiscount: sql<number>`COALESCE(max(${deals.discountPercentage}), 0)::int`,
+        platforms: sql<number>`count(DISTINCT ${deals.platform})::int`
+      })
+      .from(deals)
+      .where(
+        sql`(${deals.expiresAt} IS NULL OR ${deals.expiresAt} > ${now})`
+      );
+
+    return stats || { totalDeals: 0, avgDiscount: 0, bestDiscount: 0, platforms: 0 };
+  }
+}
+
+class MemStorage implements IStorage {
   private deals: Map<string, Deal>;
 
   constructor() {
@@ -40,27 +178,22 @@ export class MemStorage implements IStorage {
   async getDeals(filters?: DealFilters): Promise<{ deals: Deal[]; total: number }> {
     let deals = Array.from(this.deals.values());
     
-    // Filter expired deals
     const now = new Date();
     deals = deals.filter(deal => !deal.expiresAt || deal.expiresAt > now);
     
     if (filters) {
-      // Filter by platforms
       if (filters.platforms && filters.platforms.length > 0) {
         deals = deals.filter(deal => filters.platforms!.includes(deal.platform));
       }
       
-      // Filter by categories
       if (filters.categories && filters.categories.length > 0) {
         deals = deals.filter(deal => filters.categories!.includes(deal.category));
       }
       
-      // Filter by minimum discount
       if (filters.minDiscount) {
         deals = deals.filter(deal => deal.discountPercentage >= filters.minDiscount!);
       }
       
-      // Filter by price range
       if (filters.minPrice) {
         deals = deals.filter(deal => deal.discountedPrice >= filters.minPrice!);
       }
@@ -69,7 +202,6 @@ export class MemStorage implements IStorage {
         deals = deals.filter(deal => deal.discountedPrice <= filters.maxPrice!);
       }
       
-      // Sort deals
       if (filters.sortBy) {
         switch (filters.sortBy) {
           case "discount_desc":
@@ -96,7 +228,6 @@ export class MemStorage implements IStorage {
     
     const total = deals.length;
     
-    // Pagination
     const page = filters?.page || 1;
     const limit = filters?.limit || 50;
     const start = (page - 1) * limit;
@@ -159,4 +290,17 @@ export class MemStorage implements IStorage {
   }
 }
 
-export const storage = new MemStorage();
+function createStorage(): IStorage {
+  const dbUrl = process.env.DATABASE_URL;
+  console.log("Initializing storage. DATABASE_URL:", dbUrl ? `${dbUrl.substring(0, 20)}...` : "not set");
+  
+  if (dbUrl && !dbUrl.includes("placeholder") && dbUrl.startsWith("postgresql://") && dbUrl.length > 20) {
+    console.log("Using PostgreSQL storage");
+    return new PostgresStorage();
+  } else {
+    console.log("Using in-memory storage");
+    return new MemStorage();
+  }
+}
+
+export const storage: IStorage = createStorage();
