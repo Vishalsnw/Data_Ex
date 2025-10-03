@@ -1,0 +1,29 @@
+name: Extract all tar.gz
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  extract:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v4
+
+      - name: List tar.gz files
+        run: ls -lh *.tar.gz || echo "No tar.gz files found"
+
+      - name: Extract all tar.gz files
+        run: |
+          for f in *.tar.gz; do
+            if [ -f "$f" ]; then
+              echo "Extracting $f..."
+              tar -xvzf "$f"
+            fi
+          done
+
+      - name: Show extracted files
+        run: ls -R
