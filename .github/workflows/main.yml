@@ -18,26 +18,27 @@ jobs:
       - name: List zip files
         run: ls -lh *.zip || echo "No zip files found"
 
-      - name: Extract all zip files (fix symlinks)
+      - name: Extract all zip files (resolve symlinks)
         run: |
           for f in *.zip; do
             if [ -f "$f" ]; then
               echo "Extracting $f..."
               mkdir -p extracted
               unzip -o "$f" -d extracted
-              # Copy extracted content, convert symlinks to real files
-              rsync -av --copy-links extracted/ .
+
+              # Copy everything as real files/folders (no symlinks)
+              cp -rL extracted/* .
               rm -rf extracted
             fi
           done
 
       - name: Show extracted files
-        run: ls -R
+        run: ls -lR
 
       - name: Commit and Push Extracted Files
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git add .
-          git commit -m "Extracted zip files (symlinks fixed) [skip ci]" || echo "No changes to commit"
+          git commit -m "Extracted zip files (symlinks resolved) [skip ci]" || echo "No changes to commit"
           git push
