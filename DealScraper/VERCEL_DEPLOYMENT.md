@@ -61,25 +61,46 @@ In the Vercel project settings, add the following environment variable:
 
 After your first deployment, you need to run migrations:
 
-### Option A: Using Vercel CLI
-
 ```bash
+# Install Vercel CLI
 npm install -g vercel
+
+# Login and link to your project
 vercel login
 vercel link
+
+# Pull environment variables
 vercel env pull .env
+
+# Run migrations
 npm run db:migrate
 ```
 
-### Option B: Using Drizzle Studio (for testing)
+## Step 6: Seed the Database
+
+Your database is now empty. Add sample deals using one of these methods:
+
+### Option A: Run Seed Script (Recommended)
 
 ```bash
-DATABASE_URL="your-database-url" npm run db:push
+# Using the environment variables from Step 5
+npm run db:seed
 ```
 
-## Step 6: Deploy
+### Option B: Trigger via API (Quick)
+
+Visit this URL once in your browser:
+```
+https://your-app.vercel.app/api/deals/refresh
+```
+
+This will generate 10 sample deals in your database.
+
+## Step 7: Deploy
 
 Click "Deploy" in Vercel. Your application will be built and deployed automatically.
+
+**Important**: After your first deployment, remember to seed your database (see Step 6) so deals will appear!
 
 ## Project Structure
 
