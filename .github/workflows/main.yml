@@ -1,0 +1,50 @@
+name: Extract all zip
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  extract:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: List zip files
+        run: ls -lh *.zip || echo "No zip files found"
+
+      - name: Extract all zip files (force real folders, no symlinks)
+        run: |
+          for f in *.zip; do
+            if [ -f "$f" ]; then
+              echo "Extracting $f..."
+              mkdir -p extracted
+              unzip -o "$f" -d extracted
+
+              echo "Removing symlinks..."
+              # Delete all symlinks (blue arrow files/folders)
+              find extracted -type l -exec rm -f {} +
+
+              echo "Copying extracted content..."
+              # Copy everything as real files/folders
+              rsync -a extracted/ .
+
+              rm -rf extracted
+            fi
+          done
+
+      - name: Show extracted files
+        run: ls -lR
+
+      - name: Commit and Push Extracted Files
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add .
+          git commit -m "Extracted zip files (symlinks removed) [skip ci]" || echo "No changes to commit"
+          git push
