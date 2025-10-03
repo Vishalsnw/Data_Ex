@@ -18,7 +18,7 @@ jobs:
       - name: List zip files
         run: ls -lh *.zip || echo "No zip files found"
 
-      - name: Extract all zip files (force real folders)
+      - name: Extract all zip files (force real folders, no symlinks)
         run: |
           for f in *.zip; do
             if [ -f "$f" ]; then
@@ -26,11 +26,13 @@ jobs:
               mkdir -p extracted
               unzip -o "$f" -d extracted
 
-              # Force convert symlink dirs into real dirs with files
-              find extracted -type l -exec rm -f {} \;
+              echo "Removing symlinks..."
+              # Delete all symlinks (blue arrow files/folders)
+              find extracted -type l -exec rm -f {} +
 
-              # Copy content as real files/folders
-              rsync -a --copy-links extracted/ .
+              echo "Copying extracted content..."
+              # Copy everything as real files/folders
+              rsync -a extracted/ .
 
               rm -rf extracted
             fi
