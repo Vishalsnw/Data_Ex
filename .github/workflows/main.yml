@@ -23,7 +23,10 @@ jobs:
           for f in *.zip; do
             if [ -f "$f" ]; then
               echo "Extracting $f..."
-              unzip -o "$f" -d .
+              mkdir -p extracted
+              unzip -o "$f" -d extracted
+              rsync -av extracted/ .
+              rm -rf extracted
             fi
           done
 
