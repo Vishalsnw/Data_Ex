@@ -1,4 +1,4 @@
-name: Extract all tar.gz
+name: Extract all zip
 
 on:
   push:
@@ -13,17 +13,17 @@ jobs:
       - name: Checkout Repo
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0   # puri history laane ke liye
+          fetch-depth: 0
 
-      - name: List tar.gz files
-        run: ls -lh *.tar.gz || echo "No tar.gz files found"
+      - name: List zip files
+        run: ls -lh *.zip || echo "No zip files found"
 
-      - name: Extract all tar.gz files
+      - name: Extract all zip files
         run: |
-          for f in *.tar.gz; do
+          for f in *.zip; do
             if [ -f "$f" ]; then
               echo "Extracting $f..."
-              tar -xvzf "$f"
+              unzip -o "$f" -d .
             fi
           done
 
@@ -35,5 +35,5 @@ jobs:
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git add .
-          git commit -m "Extracted tar.gz files [skip ci]" || echo "No changes to commit"
+          git commit -m "Extracted zip files [skip ci]" || echo "No changes to commit"
           git push
