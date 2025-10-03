@@ -21,54 +21,10 @@ jobs:
           python-version: "3.x"
 
       - name: Install dependencies
-        run: |
-          pip install --upgrade pip
-
-      - name: Copy Python extract script
-        run: |
-          cat << 'EOF' > extract_project.py
-import os
-import tarfile
-import zipfile
-import shutil
-
-def extract_and_resolve(archive_path, output_dir="extracted"):
-    if os.path.exists(output_dir):
-        shutil.rmtree(output_dir)
-    os.makedirs(output_dir, exist_ok=True)
-
-    if archive_path.endswith(".tar.gz") or archive_path.endswith(".tgz"):
-        with tarfile.open(archive_path, "r:gz") as tar:
-            tar.extractall(output_dir)
-    elif archive_path.endswith(".zip"):
-        with zipfile.ZipFile(archive_path, "r") as zip_ref:
-            zip_ref.extractall(output_dir)
-    else:
-        raise ValueError("Unsupported file type. Use .tar.gz or .zip")
-
-    for root, dirs, files in os.walk(output_dir):
-        for name in dirs + files:
-            path = os.path.join(root, name)
-            if os.path.islink(path):
-                target = os.readlink(path)
-                abs_target = os.path.abspath(os.path.join(root, target))
-                os.remove(path)
-                if os.path.exists(abs_target):
-                    if os.path.isdir(abs_target):
-                        shutil.copytree(abs_target, path)
-                    else:
-                        shutil.copy2(abs_target, path)
-
-for f in os.listdir("."):
-    if f.endswith(".zip") or f.endswith(".tar.gz"):
-        print(f"Processing {f}")
-        extract_and_resolve(f)
-
-EOF
+        run: pip install --upgrade pip
 
       - name: Run Python extract script
-        run: |
-          python extract_project.py
+        run: python extract_project.py
 
       - name: Show extracted files
         run: ls -lR
