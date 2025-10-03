@@ -12,6 +12,8 @@ jobs:
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # puri history laane ke liye
 
       - name: List tar.gz files
         run: ls -lh *.tar.gz || echo "No tar.gz files found"
@@ -27,3 +29,11 @@ jobs:
 
       - name: Show extracted files
         run: ls -R
+
+      - name: Commit and Push Extracted Files
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add .
+          git commit -m "Extracted tar.gz files [skip ci]" || echo "No changes to commit"
+          git push
