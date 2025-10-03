@@ -1,0 +1,28 @@
+name: Cleanup Repo Except LICENSE
+
+on:
+  workflow_dispatch:  # manually trigger karne ke liye (safe)
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Delete all files except LICENSE
+        run: |
+          shopt -s extglob
+          rm -rf !("LICENSE" | ".git")
+          ls -la
+
+      - name: Commit and Push Cleanup
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Cleanup repo, keep LICENSE only [skip ci]" || echo "No changes to commit"
+          git push
