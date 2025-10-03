@@ -1,44 +1,9 @@
-name: Extract all tar.gz
-
-on:
-  push:
-    branches:
-      - main
-
-jobs:
-  extract:
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout Repo
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: List tar.gz files
-        run: ls -lh *.tar.gz || echo "No tar.gz files found"
-
-      - name: Extract all tar.gz files (ignore Replit junk)
-        run: |
-          for f in *.tar.gz; do
-            if [ -f "$f" ]; then
-              echo "Extracting $f..."
-              tar -xvzf "$f" \
-                --exclude='.config' \
-                --exclude='.cache' \
-                --exclude='.replit' \
-                --exclude='replit.nix' \
-                --exclude='.env'
-            fi
-          done
-
-      - name: Show extracted files
-        run: ls -R
-
-      - name: Commit and Push Extracted Files
-        run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git add .
-          git commit -m "Extracted project code from tar.gz [skip ci]" || echo "No changes to commit"
-          git push
+- name: Extract all tar.gz files (handle Replit export)
+  run: |
+    for f in *.tar.gz; do
+      if [ -f "$f" ]; then
+        echo "Extracting $f..."
+        # Try normal extract, if it fails then try two-step
+        tar --dereference -xvzf "$f" || (gzip -d "$f" && tar -xvf "${f%.gz}")
+      fi
+    donep
