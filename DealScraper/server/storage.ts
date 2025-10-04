@@ -19,19 +19,30 @@ export interface IStorage {
 
 class PostgresStorage implements IStorage {
   private db: any;
+  private dbPromise: Promise<any>;
 
   constructor() {
-    import("./db").then((module) => {
+    this.dbPromise = import("./db").then((module) => {
       this.db = module.db;
+      return this.db;
     });
+  }
+  
+  private async ensureDb() {
+    if (!this.db) {
+      await this.dbPromise;
+    }
+    return this.db;
   }
 
   async createDeal(insertDeal: InsertDeal): Promise<Deal> {
-    const [deal] = await this.db.insert(deals).values(insertDeal).returning();
+    const db = await this.ensureDb();
+    const [deal] = await db.insert(deals).values(insertDeal).returning();
     return deal;
   }
 
   async getDeals(filters?: DealFilters): Promise<{ deals: Deal[]; total: number }> {
+    const db = await this.ensureDb();
     const now = new Date();
     const conditions = [];
 
@@ -59,7 +70,7 @@ class PostgresStorage implements IStorage {
       conditions.push(lte(deals.discountedPrice, filters.maxPrice));
     }
 
-    let query = this.db.select().from(deals).where(and(...conditions));
+    let query = db.select().from(deals).where(and(...conditions));
 
     if (filters?.sortBy) {
       switch (filters.sortBy) {
@@ -90,7 +101,7 @@ class PostgresStorage implements IStorage {
 
     const [dealsResult, totalResult] = await Promise.all([
       query.limit(limit).offset(offset),
-      this.db.select({ count: sql<number>`count(*)::int` }).from(deals).where(and(...conditions))
+      db.select({ count: sql<number>`count(*)::int` }).from(deals).where(and(...conditions))
     ]);
 
     return {
@@ -100,12 +111,14 @@ class PostgresStorage implements IStorage {
   }
 
   async getDealById(id: string): Promise<Deal | undefined> {
-    const [deal] = await this.db.select().from(deals).where(eq(deals.id, id)).limit(1);
+    const db = await this.ensureDb();
+    const [deal] = await db.select().from(deals).where(eq(deals.id, id)).limit(1);
     return deal;
   }
 
   async updateDeal(id: string, updateData: Partial<InsertDeal>): Promise<Deal | undefined> {
-    const [updated] = await this.db
+    const db = await this.ensureDb();
+    const [updated] = await db
       .update(deals)
       .set(updateData)
       .where(eq(deals.id, id))
@@ -114,13 +127,15 @@ class PostgresStorage implements IStorage {
   }
 
   async deleteDeal(id: string): Promise<boolean> {
-    const result = await this.db.delete(deals).where(eq(deals.id, id));
+    const db = await this.ensureDb();
+    const result = await db.delete(deals).where(eq(deals.id, id));
     return result.rowCount !== null && result.rowCount > 0;
   }
 
   async clearExpiredDeals(): Promise<number> {
+    const db = await this.ensureDb();
     const now = new Date();
-    const result = await this.db
+    const result = await db
       .delete(deals)
       .where(
         and(
@@ -137,9 +152,10 @@ class PostgresStorage implements IStorage {
     bestDiscount: number;
     platforms: number;
   }> {
+    const db = await this.ensureDb();
     const now = new Date();
     
-    const [stats] = await this.db
+    const [stats] = await db
       .select({
         totalDeals: sql<number>`count(*)::int`,
         avgDiscount: sql<number>`COALESCE(round(avg(${deals.discountPercentage})), 0)::int`,
