@@ -54,9 +54,12 @@ Preferred communication style: Simple, everyday language.
   - `POST /api/deals/scrape` - Trigger scraping
 
 **Data Scraping Service**
-- Mock scraping implementation in `server/services/scraper.ts`
-- Placeholder for production web scraping (intended for Puppeteer/Cheerio)
-- Scheduled scraping mechanism (currently manual trigger)
+- Real web scraping using Python scripts with Beautiful Soup
+- Platform-specific scrapers in `scripts/` directory (Python)
+- Node.js service executes Python scrapers via child_process
+- Currently working: Amazon (actively scraping real deals)
+- Limited by anti-bot protection: Flipkart, Myntra, Meesho (may fail)
+- Trigger scraping via `POST /api/deals/refresh` endpoint
 - Stores scraped deals in PostgreSQL database
 
 **Storage Layer**
